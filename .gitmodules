@@ -1,0 +1,6 @@
+[submodule "3rdparty/atftp"]
+	path = 3rdparty/atftp
+	url = https://github.com/seveas/atftp.git
+[submodule "astftpd"]
+	path = astftpd
+	url = https://github.com/asheplyakov/astftpd.git

@@ -1,0 +1,75 @@
+---
+
+- name: clean astftpd source
+  command: >
+    git clean -dfx
+  args:
+    chdir: astftpd
+
+- name: compile astftpd
+  command: >
+    make -j{{ ansible_processor_vcpus }} -C astftpd
+
+- name: enable astftpd to bind ports below 1024 and lock files in RAM
+  shell: >
+    echo "{{ capabilities|join('\n') }}" | setcap - astftpd/astftpd
+  become: true
+  vars:
+    capabilities:
+      - cap_net_bind_service=+ep
+      - cap_ipc_lock=+ep
+
+- name: clean atftp source tree
+  command: >
+    git clean -dfx
+  args:
+    chdir: 3rdparty/atftp
+
+- name: create the configure script
+  command: >
+    autoreconf -iv
+  args:
+    chdir: 3rdparty/atftp
+
+- set_fact:
+    ccache_symlink_dir: /usr/lib/ccache
+  when: ansible_os_family == 'Debian'
+
+- set_fact:
+    ccache_symlink_dir: /usr/lib64/ccache
+  when: ansible_os_family == 'RedHat'
+
+- set_fact:
+    CC: "{{ ccache_symlink_dir }}/cc"
+    CFLAGS: "-O2 -g -Wall -pipe -std=gnu89"
+    atftpd: "{{ lookup('env', 'PWD') }}/3rdparty/atftp/atftpd"
+    atftp: "{{ lookup('env', 'PWD') }}/3rdparty/atftp/atftpd"
+
+- name: run configure in atftp source tree
+  shell: >
+    ./configure
+    --disable-libpcre
+    --disable-libwrap
+    --disable-mtftp
+    --disable-libreadline
+    CFLAGS="{{ CFLAGS }}"
+    CC="{{ CC }}"
+  args:
+    chdir: 3rdparty/atftp
+ 
+- name: build atftp
+  shell: >
+    make -j{{ ansible_processor_vcpus }} V=1 CFLAGS="{{ CFLAGS }}" > build-`date +%Y%m%d%H%M`.log 2>&1
+  args:
+    chdir: 3rdparty/atftp
+  
+- name: install setpcap utility on Debian/Ubuntu
+  package: name=libcap2-bin state=present
+  become: true
+
+- name: enable atftpd to bind ports below 1024
+  command: >
+    setcap cap_net_bind_service=+ep "{{ atftpd }}"
+  become: true
+
+

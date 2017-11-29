@@ -1,0 +1,2 @@
+[atftpd]
+localhost ansible_connection=local
