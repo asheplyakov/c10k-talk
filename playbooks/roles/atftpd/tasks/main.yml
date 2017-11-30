@@ -1,18 +1,24 @@
 ---
 
+- set_fact:
+    top_srcdir: "{{ lookup('env', 'PWD') }}"
+
 - name: clean astftpd source
   command: >
     git clean -dfx
   args:
-    chdir: astftpd
+    chdir: "{{ top_srcdir }}/astftpd"
+
 
 - name: compile astftpd
   command: >
-    make -j{{ ansible_processor_vcpus }} -C astftpd
+    make -j{{ ansible_processor_vcpus }} -C {{ top_srcdir }}/astftpd
 
 - name: enable astftpd to bind ports below 1024 and lock files in RAM
   shell: >
-    echo "{{ capabilities|join('\n') }}" | setcap - astftpd/astftpd
+    echo -e "{{ capabilities|join('\n') }}" | setcap - {{ top_srcdir }}/astftpd/astftpd
+  args:
+    executable: /bin/bash
   become: true
   vars:
     capabilities:
@@ -23,13 +29,13 @@
   command: >
     git clean -dfx
   args:
-    chdir: 3rdparty/atftp
+    chdir: "{{ top_srcdir }}/3rdparty/atftp"
 
 - name: create the configure script
   command: >
     autoreconf -iv
   args:
-    chdir: 3rdparty/atftp
+    chdir: "{{ top_srcdir }}/3rdparty/atftp"
 
 - set_fact:
     ccache_symlink_dir: /usr/lib/ccache
@@ -55,13 +61,13 @@
     CFLAGS="{{ CFLAGS }}"
     CC="{{ CC }}"
   args:
-    chdir: 3rdparty/atftp
+    chdir: "{{ top_srcdir }}/3rdparty/atftp"
  
 - name: build atftp
   shell: >
     make -j{{ ansible_processor_vcpus }} V=1 CFLAGS="{{ CFLAGS }}" > build-`date +%Y%m%d%H%M`.log 2>&1
   args:
-    chdir: 3rdparty/atftp
+    chdir: "{{ top_srcdir }}/3rdparty/atftp"
   
 - name: install setpcap utility on Debian/Ubuntu
   package: name=libcap2-bin state=present
