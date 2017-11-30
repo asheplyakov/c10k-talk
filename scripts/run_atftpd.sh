@@ -2,9 +2,11 @@
 set -e
 cd "${0%/*}/.."
 set -x
-exec ./3rdparty/atftp/atftpd \
+exec $onload ./3rdparty/atftp/atftpd \
 	--logfile - \
-	-m 500 \
+	--verbose=0 \
+	-m 2000 \
+        --user `whoami`.`whoami` \
 	--daemon \
 	--no-fork \
 	--no-multicast \
