@@ -11,7 +11,7 @@ Synopsis
    - `Demo: multithreaded tftp server versus 100+ clients`_
 * `C10k aware design principles`_
 * `Readiness notification: epoll`_
-* `Kernel based load balancing: SO_REUSE_PORT`_
+* `Kernel based load balancing: SO_REUSEPORT`_
 * `Classical text`_
 
 
@@ -93,7 +93,7 @@ C10K aware design principles
 
 * Use the kernel facilities to dispatch the load between the server threads
 
-  - SO_REUSE_PORT
+  - SO_REUSEPORT
 
 * Avoid using threads for concurrency, use cooperative multitasking
   when appropriate (coroutines/green threads)
@@ -109,9 +109,79 @@ Readiness notification: epoll
 * Therefore can provide readiness change notification
 * User data can be inserted into ``epoll_event``
 
+Initialize the event loop::
 
-Kernel based load balancing: SO_REUSE_PORT
+  int epfd = epoll_create1(EPOLL_CLOEXEC);
+
+Subscribe for the notifications::
+
+  struct client {
+    int sock;
+    unsigned bufsz;
+    char *buf;
+  };
+
+  struct epoll_event ev;
+  ev.events = EPOLLIN;
+  ev.data.ptr = client;
+  if (epoll_ctl(epfd, EPOLL_CTL_ADD, client->sock, &ev) < 0) {
+      perror("epoll_ctl");
+      return -1;
+  }
+
+Wait for events::
+
+  struct epoll_events events[EVENT_COUNT];
+  int nfired;
+  if ((nfired = epoll_wait(epfd, events, EVENT_COUNT, -1)) > 0) {
+     // process events
+  }
+
+Terminate the event loop::
+
+  close(epfd);
+
+Notes: 
+
+* timers, signals, notifications from other threads can be processed
+  in the same way, see timerfd_, signalfd_, eventfd_
+* Non-blocking IO/readiness notification does not work with ordinary files
+
+
+.. _timerfd: http://man7.org/linux/man-pages/man2/timerfd_create.2.html
+.. _signalfd: http://man7.org/linux/man-pages/man2/signalfd.2.html
+.. _eventfd: http://man7.org/linux/man-pages/man2/eventfd.2.html
+
+
+Kernel based load balancing: SO_REUSEPORT
 ==========================================
+
+``SO_REUSEADDR``: bind(2) allows reusing local addresses. That is,
+if there's a TCP socket in ``TIME_WAIT`` state bound to 0.0.0.0:X
+it's still possible to bind to port X.
+
+``SO_REUSEPORT`` allows multiple TCP (UDP) sockets on the same host to
+bind to the same port (`LWN article`_). With TCP this allows multiple
+listening sockets (normally each in a different thread) to be bound
+to the same port. Each thread can accept() incoming connections without
+disrupting others. Most importantly the kernel will evenly distribute
+incoming connections between threads.
+
+Before ``SO_REUSEPORT`` multiple threads could accept() on the same socket,
+however
+
+* any incoming connection wakes up all threads, and only one of them can
+  make a progress, while others get blocked immediately (known as
+  `thundering herd problem`_)
+* under high load the distribution of incoming connections between threads
+  is very far from fair
+
+Advanced load balancing is possible with ``SO_ATTACH_BPF`` (`Attaching
+eBPF programs to sockets`_).
+
+.. _LWN article: https://lwn.net/Articles/542629
+.. _thundering herd problem: https://en.wikipedia.org/wiki/Thundering_herd_problem
+.. _Attaching eBPF programs to sockets: https://lwn.net/Articles/625224
 
 
 Classical text
