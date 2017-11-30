@@ -9,6 +9,15 @@
   args:
     chdir: "{{ top_srcdir }}/astftpd"
 
+- name: install setcap utility on Debian/Ubuntu
+  package: name=libcap2-bin state=present
+  become: true
+  when: ansible_os_family == 'Debian'
+
+- name: install setcap utility on CentOS/RedHat
+  package: name=libcap state=present
+  become: true
+  when: ansible_os_family == 'RedHat'
 
 - name: compile astftpd
   command: >
@@ -69,10 +78,6 @@
   args:
     chdir: "{{ top_srcdir }}/3rdparty/atftp"
   
-- name: install setpcap utility on Debian/Ubuntu
-  package: name=libcap2-bin state=present
-  become: true
-
 - name: enable atftpd to bind ports below 1024
   command: >
     setcap cap_net_bind_service=+ep "{{ atftpd }}"
